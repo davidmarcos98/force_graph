@@ -97,7 +97,8 @@ var link = container.append("g")
     .selectAll("line")
     .data(graph.links, function(d) { return d.source + ", " + d.target;})
     .enter().append("line")
-      .attr('class', 'link');
+    .attr('class', 'link')
+    .call(zoom.transform, transform);;
 let nodes = container.append("g")
     .selectAll("circle")
     .data(graph.nodes)
