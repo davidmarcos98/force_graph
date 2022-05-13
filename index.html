@@ -31,7 +31,7 @@ let maxDistance = 500
 // Call zoom for svg container.
 let transform = d3.zoomIdentity.translate(200, 0).scale(0.6);
 let zoom = d3.zoom().on('zoom', zoomed);
-svg.call(zoom, transform).call(zoom.transform, transform);
+svg.call(zoom, transform).call(zoom.transform, transform).on("dblclick.zoom", null);;
 
 var color = d3.scaleOrdinal(d3.schemeCategory20);
 
@@ -67,12 +67,12 @@ var container = svg.append('g');
 // Toggle for ego networks on click (below).
 var toggle = 0;
 
+let linkedByIndex = {};
 
 d3.json("data.json", function(error, graph) {
   if (error) throw error;
 
   // Make object of all neighboring nodes.
-  var linkedByIndex = {};
   graph.links.forEach(function(d) {
 	  linkedByIndex[d.source + ',' + d.target] = 1;
 	  linkedByIndex[d.target + ',' + d.source] = 1;
@@ -80,7 +80,7 @@ d3.json("data.json", function(error, graph) {
 
   // A function to test if two nodes are neighboring.
   function neighboring(a, b) {
-	  return linkedByIndex[a.index + ',' + b.index];
+	  return linkedByIndex[a.id + ',' + b.id];
   }
 
   // Linear scale for degree centrality.
@@ -109,11 +109,8 @@ let nodes = container.append("g")
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended))
-    .on("click", function(d){
-        // console.log(event)
-        // tooltip.style("visibility", "visible");
-        // tooltip.style("top", (event.pageY)+"px");
-        // tooltip.style("left", (event.pageX)+"px");
+    
+    .on("dblclick", function(d){
         window.open("https://twitter.com/" + d.author_handler + "/status/" + d.tweet_id, "_blank");
     });
         
@@ -121,12 +118,30 @@ let nodes = container.append("g")
 let node = nodes.append("circle")
     .attr('r', function(d, i) { return d.degree ? degreeSize(d.degree) : 5; })
     // Color by group, a result of modularity calculation in NetworkX.
-    .attr("fill", function(d) { return color(d.group); });
+    .attr("fill", function(d) { return color(d.group); })
+    .attr('class', 'node')
+    .on('mouseover', function(d, i) {
+        // Ternary operator restyles links and nodes if they are adjacent.
+        d3.selectAll('.link').style('stroke-opacity', function (l) {
+            return l.target == d || l.source == d ? 1 : 0.1;
+        });
+        d3.selectAll('.node').style('opacity', function (n) {
+            return neighboring(d, n) ? 1 : 0.1;
+        });
+        d3.select(this).style('opacity', 1);
+        toggle = 1;
+    })
+    .on('mouseout', function(d, i) {
+        d3.selectAll('.link').style('stroke-opacity', '0.6');
+        d3.selectAll('.node').style('opacity', '1');
+        toggle = 0;
+    });
 let title = nodes.append("text")
     .attr("text-anchor", "middle")
     .attr("dy",0)
     .attr("dx", 0)
     .attr("color", "black")
+    .style('pointer-events', 'none')
     .text(function(d) {
         if ("author_handler" in d){
             return d.author_handler
