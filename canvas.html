@@ -10,6 +10,12 @@
         border: 1px solid #eaeaea;
         opacity: 80%;
    }
+   #container{
+       overflow: hidden;
+   }
+   body {
+       overflow: hidden;
+   }
 </style>
 <body>
 <div id="container"></div>
@@ -17,7 +23,7 @@
 
 <script src="https://d3js.org/d3.v5.min.js"></script>
 <script>
-var width = window.screen.width, height = window.screen.height;
+var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight;
 var canvas = d3.select('#container')
     .append('canvas')
     .attr("id", "canvas")
