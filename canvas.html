@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    #legend {
+        float: left;
+        position: absolute;
+        top: 20px;
+        background: white;
+        z-index: 9;
+        border: 1px solid #eaeaea;
+        opacity: 80%;
+   }
+</style>
+<body>
+<div id="container"></div>
+<div id="legend"></div>
+
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script>
+var width = window.screen.width, height = window.screen.height;
+var canvas = d3.select('#container')
+    .append('canvas')
+    .attr("id", "canvas")
+    .attr('width', width)
+    .attr('height', height);
+var ctx = canvas.node().getContext('2d');
+
+
+const simulation = forceSimulation(width, height);
+let edges = null, nodes = null, degreeSize = null, nodesRadius = {};
+let transform = d3.zoomIdentity;
+let opacities = {}
+let opacityChanged = false
+d3.json("data.json")
+    .then(function(data){
+        nodes = data.nodes.map(d => Object.assign({}, d));
+        let degreeSize = d3.scaleLinear()
+            .domain([d3.min(nodes, d => d.degree),d3.max(nodes, d => d.degree)])
+            .range([10,75]);
+        nodes.forEach(function(d, i) {
+            nodesRadius[d.id] = degreeSize(d.degree);
+        })
+        edges = data.links.map(d => Object.assign({}, d));
+
+        let mouseOverDate = new Date();
+        let difference_ms;
+    
+        canvas
+            .call(d3.drag()
+                .subject(dragSubject)
+                .on('start', dragStarted)
+                .on('drag', dragged)
+                .on('end', dragEnded)
+            )
+            .call(d3.zoom() 
+                .scaleExtent([1 / 10, 8])
+                .on('zoom', zoomed)
+            )
+            .on("dblclick.zoom", null)
+            .on('click', function() {
+                difference_ms = (new Date()).getTime() - mouseOverDate.getTime();
+                mouseOverDate = new Date();
+                const x = transform.invertX(d3.event.layerX);
+                const y = transform.invertY(d3.event.layerY);
+                const node = findNode(nodes, x, y);
+                if(difference_ms > 200){
+                    opacities = {}
+                    if (node) {
+                        nodes.forEach(function(d) {
+                            if (d.author_handler == node.author_handler) {
+                                opacities[d.id] = 1;
+                            }
+                        })
+                        edges.forEach(function(d) {
+                            if(d.target.id == node.id || d.source.id == node.id) {
+                                opacities[d.source.id + '' + d.target.id] = 1;
+                                opacities[d.source.id] = 1;
+                                opacities[d.target.id] = 1;
+                            }
+                        })
+                        opacityChanged = true
+                    } else if(opacityChanged) {
+                        opacities = {}
+                        opacityChanged = false
+                    }
+                } else{
+                    opacities = {}
+                    opacityChanged = false
+                    window.open("https://twitter.com/" + node.author_handler + "/status/" + node.tweet_id, "_blank");
+                }
+            });
+    
+            simulation.nodes(nodes)
+                .on("tick",simulationUpdate);
+            simulation.force("link")
+                .links(edges);
+            function zoomed() {
+                transform = d3.event.transform;
+            }
+    }
+);
+
+//Initialize legend
+var itemWidth = 35;
+var itemHeight = 4;
+var legendSpacing = -10;
+var xOffset = 10;
+var yOffset = 10 ;
+var legend = d3
+    .select('#legend')
+    .append('svg')
+        .attr("width", 120)
+        .attr("height", 50)
+        .selectAll('.legendItem')
+        .data([{kind: "Retweet", color: "green"}, {kind: "Reply", color: "blue"}]);
+
+// var  bbox = legend.getBBox();
+// legend.setAttribute("width", bbox.x + bbox.width + bbox.x);
+// legend.setAttribute("height", bbox.y + bbox.height + bbox.y);
+
+
+//Create legend items
+legend
+    .enter()
+    .append('rect')
+    .attr('class', 'legendItem')
+    .attr('width', itemWidth)
+    .attr('height', 5)
+    .style('fill', d => d.color)
+    .attr('transform',
+        (d, i) => {
+            var x = xOffset;
+            var y = yOffset + (itemWidth + legendSpacing) * i;
+            return `translate(${x}, ${y})`;
+        });
+
+//Create legend labels
+legend
+    .enter()
+    .append('text')
+    .attr('x', xOffset + itemWidth + itemHeight)
+    .attr('y', (d, i) => yOffset + (itemWidth + legendSpacing) * i + itemHeight + 3)
+    .text(d => d.kind);  
+
+    
+    /** Find the node that was clicked, if any, and return it. */
+    function dragSubject() {
+        const x = transform.invertX(event.layerX),
+                y = transform.invertY(event.layerY);
+        const node = findNode(nodes, x, y);
+        if (node) {
+            node.x =  transform.applyX(node.x);
+            node.y = transform.applyY(node.y);
+        }
+        // else: No node selected, drag container
+        return node;
+    }
+
+    function dragStarted() {
+        if (!d3.event.active) {
+            simulation.alphaTarget(0.3).restart();
+        }
+        d3.event.subject.fx = transform.invertX(d3.event.x);
+        d3.event.subject.fy = transform.invertY(d3.event.y);
+    }
+
+    function dragged() {
+        d3.event.subject.fx = transform.invertX(d3.event.x);
+        d3.event.subject.fy = transform.invertY(d3.event.y);
+    }
+
+    function dragEnded() {
+        if (!event.active) {
+            simulation.alphaTarget(0);
+        }
+        d3.event.subject.fx = null;
+        d3.event.subject.fy = null;
+    }
+
+function canvas_arrow(context, fromx, fromy, tox, toy, offset) {
+    var headlen = 20; // length of head in pixels
+    var dx = tox - fromx;
+    var dy = toy - fromy;
+    var angle = Math.atan2(dy, dx);
+    context.moveTo(fromx, fromy);
+    context.lineTo(tox, toy);
+    context.lineTo(tox - headlen * Math.cos(angle - Math.PI / 6), toy - headlen * Math.sin(angle - Math.PI / 6));
+    context.moveTo(tox, toy);
+    context.lineTo(tox - headlen * Math.cos(angle + Math.PI / 6), toy - headlen * Math.sin(angle + Math.PI / 6));
+}
+
+
+function simulationUpdate() {
+    ctx.save();
+    ctx.clearRect(0, 0, width, height);
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.k, transform.k);
+    // Draw edges
+    edges.forEach(function(d) {
+        ctx.beginPath();
+        canvas_arrow(ctx, d.source.x, d.source.y, d.target.x, d.target.y, nodesRadius[d.target.id])
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = d.kind == 'reply' ? '#1DA1F2' : '#00bb7c';
+        ctx.globalAlpha = opacityChanged ? opacities[d.source.id + '' + d.target.id] || .1 : 1
+        ctx.stroke();
+    });
+    // Draw nodes
+    nodes.forEach(function(d, i) {
+        ctx.beginPath();
+        // Node fill
+        ctx.moveTo(d.x + nodesRadius[d.id], d.y);
+        ctx.arc(d.x, d.y, nodesRadius[d.id], 0, 2 * Math.PI);
+        ctx.fillStyle = '#9e9e9e';
+        ctx.globalAlpha = opacityChanged ? opacities[d.id] || .1 : 1
+        ctx.fill();
+        // Node outline
+        ctx.strokeStyle = 'white'
+        ctx.lineWidth = '1.5'
+        ctx.stroke();
+        // Node text
+        ctx.font = 'bold 8pt Calibri';
+        ctx.fillStyle = 'black';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.author_handler, d.x, d.y+3);
+
+    });
+    ctx.restore();
+}
+
+function findNode(nodes, x, y) {
+    let i;
+    for (i = nodes.length - 1; i >= 0; --i) {
+        const node = nodes[i],
+            dx = x - node.x,
+            dy = y - node.y,
+            distSq = (dx * dx) + (dy * dy);
+        let rSq = nodesRadius[node.id] * nodesRadius[node.id] + 1;
+        if (distSq < rSq) {
+        return node;
+        }
+    }
+    // No node selected
+    return undefined; 
+}
+
+function forceSimulation(width, height) {
+    return d3.forceSimulation()
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("charge", d3.forceManyBody().strength([-1200]).distanceMax([500]))
+        .force("link", d3.forceLink().id(d => d.id));
+}
+
+</script>
+</body>

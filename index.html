@@ -3,13 +3,16 @@
 <style>
 
 .links line {
-  stroke: #999;
-  stroke-opacity: 0.6;
+    stroke-opacity: 1;
 }
 
 .nodes circle {
-  stroke: #fff;
-  stroke-width: 1.5px;
+    stroke: #fff;
+    stroke-width: 1.5px;
+}
+
+.title {
+    fill: black
 }
 
 
@@ -26,90 +29,90 @@ var svg = d3.select("svg"),
 document.getElementById("chart").style.width = "100%"    
 document.getElementById("chart").style.height = "100%"    
 
-let strength = -1000
+let strength = -1300
 let maxDistance = 500
 // Call zoom for svg container.
 let transform = d3.zoomIdentity.translate(200, 0).scale(0.6);
 let zoom = d3.zoom().on('zoom', zoomed);
+let dragging = false;
 svg.call(zoom, transform).call(zoom.transform, transform).on("dblclick.zoom", null);;
 
-var color = d3.scaleOrdinal(d3.schemeCategory20);
 
+let filter = svg.append("defs").append("filter")
+    .attr("x", "-0.5")
+    .attr("y", "-0.5")
+    .attr("width", "2")
+    .attr("height", "2")
+    .attr("id", "background");
+filter.append("feFlood")
+    .attr("flood-opacity", 0.7)
+    .attr("flood-color", "#00819d");
+filter.append("feComposite")
+    .attr("in", "SourceGraphic");
 
 var simulation = d3.forceSimulation()
-    .force("link", d3.forceLink().id(function(d) { return d.id; }))//Or to use names rather than indices: .id(function(d) { return d.id; }))
-    .force("charge", d3.forceManyBody().strength([strength]).distanceMax([maxDistance]))
-    .force("center", d3.forceCenter(width / 2, height / 2));
+.force("link", d3.forceLink().id(function(d) { return d.id; }))//Or to use names rather than indices: .id(function(d) { return d.id; })
+.force("charge", d3.forceManyBody().strength([strength]).distanceMax([maxDistance]))
+.force("center", d3.forceCenter(width / 2, height / 2));
 
 let tooltip = d3.select("body").append("div")
-    .attr("height", "200")
-    .attr("width", "200")
-    .style("position", "absolute")
-    .style("visibility", "hidden")
-    .style("color", "black");
+.attr("height", "200")
+.attr("width", "200")
+.style("position", "absolute")
+.style("visibility", "hidden")
+.style("color", "black");
 
 
 var container = svg.append('g');
-
-// // Create form for search (see function below).
-// var search = d3.select("body").append('form').attr('onsubmit', 'return false;').call(zoom.transform, transform);
-
-// var box = search.append('input')
-// 	.attr('type', 'text')
-// 	.attr('id', 'searchTerm')
-// 	.attr('placeholder', 'Type to search...');
-
-// var button = search.append('input')
-// 	.attr('type', 'button')
-// 	.attr('value', 'Search')
-// 	.on('click', function () { searchNodes(); });
-
-// Toggle for ego networks on click (below).
+let linkedByIndex = {};
 var toggle = 0;
 
-let linkedByIndex = {};
-
 d3.json("data.json", function(error, graph) {
-  if (error) throw error;
+    if (error) throw error;
+    
+    graph.links.forEach(function(d) {
+        linkedByIndex[d.source + ',' + d.target] = 1;
+        linkedByIndex[d.target + ',' + d.source] = 1;
+    });
 
-  // Make object of all neighboring nodes.
-  graph.links.forEach(function(d) {
-	  linkedByIndex[d.source + ',' + d.target] = 1;
-	  linkedByIndex[d.target + ',' + d.source] = 1;
-  });
+    let color = d3.scaleLinear()
+        .domain([d3.min(graph.nodes, function(d) { return d.degree; }),d3.max(graph.nodes, function(d) { return d.degree; })])
+        .range(["#bd6877", "#de4561"]);
+    let opacity = d3.scaleLinear()
+        .domain([d3.min(graph.nodes, function(d) { return d.degree; }),d3.max(graph.nodes, function(d) { return d.degree; })])
+        .range([0.7, 1]);
 
-  // A function to test if two nodes are neighboring.
-  function neighboring(a, b) {
-	  return linkedByIndex[a.id + ',' + b.id];
-  }
+    function neighboring(a, b) {
+        return linkedByIndex[a.id + ',' + b.id];
+    }
 
-  // Linear scale for degree centrality.
 var degreeSize = d3.scaleLinear()
     .domain([d3.min(graph.nodes, function(d) {return d.degree; }),d3.max(graph.nodes, function(d) {return d.degree; })])
     .range([10,75]);
 
-// Collision detection based on degree centrality.
 simulation.force("collide", d3.forceCollide().radius( function (d) { return degreeSize(d.degree); }));
 
-
-var link = container.append("g")
+let link = container.append("g")
     .attr("class", "links")
     .selectAll("line")
     .data(graph.links, function(d) { return d.source + ", " + d.target;})
     .enter().append("line")
     .attr('class', 'link')
-    .call(zoom.transform, transform);;
+    .attr('stroke-width', function(d) {return d.kind == 'reply' ? 3 : 3})
+    .attr('stroke', function(d) {return d.kind == 'reply' ? '#1DA1F2' : '#00bb7c'})
+    .call(zoom.transform, transform);
+    
 let nodes = container.append("g")
     .selectAll("circle")
     .data(graph.nodes)
     .enter()
     .append("g")
     .attr("class", "nodes")
+    .attr("opacity", d => opacity(d.degree))
     .call(d3.drag()
         .on("start", dragstarted)
         .on("drag", dragged)
         .on("end", dragended))
-    
     .on("dblclick", function(d){
         window.open("https://twitter.com/" + d.author_handler + "/status/" + d.tweet_id, "_blank");
     });
@@ -117,11 +120,10 @@ let nodes = container.append("g")
 
 let node = nodes.append("circle")
     .attr('r', function(d, i) { return d.degree ? degreeSize(d.degree) : 5; })
-    // Color by group, a result of modularity calculation in NetworkX.
-    .attr("fill", function(d) { return color(d.group); })
+    .attr("fill", "#9e9e9e")
     .attr('class', 'node')
     .on('mouseover', function(d, i) {
-        // Ternary operator restyles links and nodes if they are adjacent.
+        if (dragging) { return }
         d3.selectAll('.link').style('stroke-opacity', function (l) {
             return l.target == d || l.source == d ? 1 : 0.1;
         });
@@ -132,24 +134,28 @@ let node = nodes.append("circle")
         toggle = 1;
     })
     .on('mouseout', function(d, i) {
-        d3.selectAll('.link').style('stroke-opacity', '0.6');
-        d3.selectAll('.node').style('opacity', '1');
+        if (dragging) { return }
+        d3.selectAll('.link').style('stroke-opacity', '1');
+        d3.selectAll('.node').style('opacity', opacity(d.degree));
         toggle = 0;
     });
 let title = nodes.append("text")
+    .filter(function(d) { return "author_handler" in d})
     .attr("text-anchor", "middle")
+    .attr("class", "title")
     .attr("dy",0)
     .attr("dx", 0)
-    .attr("color", "black")
-    .style('pointer-events', 'none')
+    .attr("rx", "15")
+    .attr("font-weight", "bold")
+    .attr("font-size", "15")
+    .style("pointer-events", "none")
+    // .attr("filter","url(#background)")
     .text(function(d) {
         if ("author_handler" in d){
             return d.author_handler
         }
-        return d.id
+        return ''
     });
-
-
 
 simulation
     .nodes(graph.nodes)
@@ -159,6 +165,10 @@ simulation.force("link")
     .links(graph.links);
 
 function ticked() {
+    for (let i = 0; i < 1; i++) {
+        simulation.tick();
+    }
+
     link
         .attr("x1", function(d) { return d.source.x; })
         .attr("y1", function(d) { return d.source.y; })
@@ -173,120 +183,13 @@ function ticked() {
         .attr("dy", function(d) { return d.y; });
 }
 
-// // A slider (using only d3 and HTML5) that removes nodes below the input threshold.
-// var slider = d3.select('body').append('p').text('Edge Weight Threshold: ');
-
-// slider.append('label')
-//     .attr('for', 'threshold')
-//     .text('1');
-// slider.append('input')
-//     .attr('type', 'range')
-//     .attr('min', d3.min(graph.links, function(d) {return d.weight; }))
-//     .attr('max', d3.max(graph.links, function(d) {return d.weight; }) / 2)
-//     .attr('value', d3.min(graph.links, function(d) {return d.weight; }))
-//     .attr('id', 'threshold')
-//     .style('width', '50%')
-//     .style('display', 'block')
-//     .on('input', function () { 
-//         var threshold = this.value;
-
-//         d3.select('label').text(threshold);
-
-//         // Find the links that are at or above the threshold.
-//         var newData = [];
-//         graph.links.forEach( function (d) {
-//             if (d.weight >= threshold) {newData.push(d); };
-//         });
-
-//         // Data join with only those new links.
-//         link = link.data(newData, function(d) {return d.source + ', ' + d.target;});
-//         link.exit().remove();
-//         var linkEnter = link.enter().append('line').attr('class', 'link');
-//         link = linkEnter.merge(link);
-
-//         node = node.data(graph.nodes);
-
-//         // Restart simulation with new link data.
-//         simulation
-//             .nodes(graph.nodes).on('tick', ticked)
-//             .force("link").links(newData);
-
-//         simulation.alphaTarget(0.1).restart();
-
-//     });
-
-// var slider = d3.select('body').append('p').text('Max Distance: ');
-
-// slider.append('label')
-//     .attr('for', 'distance')
-//     .text('1');
-// slider.append('input')
-//     .attr('type', 'range')
-//     .attr('min', 0)
-//     .attr('max', 1000)
-//     .attr('value', 1000)
-//     .attr('id', 'distance')
-//     .style('width', '50%')
-//     .style('display', 'block')
-//     .on('input', function () { 
-//         maxDistance = this.value;
-
-//         simulation
-//             .force("charge", d3.forceManyBody().strength([strength]).distanceMax([maxDistance]));
-
-//         simulation.alphaTarget(0.6).restart();
-
-//     });
-// var slider = d3.select('body').append('p').text('Strength: ');
-
-// slider.append('label')
-//     .attr('for', 'strength')
-//     .text('1');
-// slider.append('input')
-//     .attr('type', 'range')
-//     .attr('min', -200)
-//     .attr('max', 100)
-//     .attr('value', -120)
-//     .attr('id', 'strength')
-//     .style('width', '50%')
-//     .style('display', 'block')
-//     .on('input', function () { 
-//         strength = this.value;
-
-//         simulation
-//             .force("charge", d3.forceManyBody().strength([strength]).distanceMax([maxDistance]));
-
-//         simulation.alphaTarget(0.6).restart();
-
-//     });
-
-// A dropdown menu with three different centrality measures, calculated in NetworkX.
-// Accounts for node collision.
-// var dropdown = d3.select('body').append('div')
-//     .append('select')
-//     .on('change', function() { 
-//         var centrality = this.value;
-//         var centralitySize = d3.scaleLinear()
-//             .domain([d3.min(graph.nodes, function(d) { return d[centrality]; }), d3.max(graph.nodes, function(d) { return d[centrality]; })])
-//             .range([8,25]);
-//         node.attr('r', function(d) { return centralitySize(d[centrality]); } );  
-//         // Recalculate collision detection based on selected centrality.
-//         simulation.force("collide", d3.forceCollide().radius( function (d) { return centralitySize(d[centrality]); }));
-//         simulation.alphaTarget(0.1).restart();
-//     });
-
-// dropdown.selectAll('option')
-//     .data(['Degree Centrality', 'Betweenness Centrality', 'Eigenvector Centrality'])
-//     .enter().append('option')
-//     .attr('value', function(d) { return d.split(' ')[0].toLowerCase(); })
-//     .text(function(d) { return d; });
-
 });
 
 function dragstarted(d) {
   if (!d3.event.active) simulation.alphaTarget(0.3).restart();
   d.fx = d.x;
   d.fy = d.y;
+  dragging = true;
 }
 
 function dragged(d) {
@@ -298,6 +201,7 @@ function dragended(d) {
   if (!d3.event.active) simulation.alphaTarget(0);
   d.fx = null;
   d.fy = null;
+  dragging = false;
 }
 // Zooming function translates the size of the svg container.
 function zoomed() {
