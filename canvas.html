@@ -97,7 +97,10 @@ d3.json("data.json")
             });
     
             simulation.nodes(nodes)
-                .on("tick",simulationUpdate);
+                .on("tick",simulationUpdate)
+                .on("end", function (){
+                    simulation.restart();
+                });
             simulation.force("link")
                 .links(edges);
             function zoomed() {
