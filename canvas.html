@@ -30,7 +30,10 @@ var canvas = d3.select('#container')
     .attr('width', width)
     .attr('height', height);
 var ctx = canvas.node().getContext('2d');
-
+let container = document.getElementById("container");
+let hoverBallColor = 'lightblue'
+let unhoverBallColor = '#9e9e9e'
+let hoverId = null;
 
 const simulation = forceSimulation(width, height);
 let edges = null, nodes = null, degreeSize = null, nodesRadius = {};
@@ -63,6 +66,20 @@ d3.json("data.json")
                 .on('zoom', zoomed)
             )
             .on("dblclick.zoom", null)
+            .on('mousemove', function() {
+                difference_ms = (new Date()).getTime() - mouseOverDate.getTime();
+                mouseOverDate = new Date();
+                const x = transform.invertX(d3.event.layerX);
+                const y = transform.invertY(d3.event.layerY);
+                const node = findNode(nodes, x, y);
+                if (node) {
+                    hoverId = node.id
+                    container.style.cursor = 'pointer';
+                } else {
+                    hoverId = null
+                    container.style.cursor = 'default';
+                }
+            })
             .on('click', function() {
                 difference_ms = (new Date()).getTime() - mouseOverDate.getTime();
                 mouseOverDate = new Date();
@@ -219,7 +236,7 @@ function simulationUpdate() {
         // Node fill
         ctx.moveTo(d.x + nodesRadius[d.id], d.y);
         ctx.arc(d.x, d.y, nodesRadius[d.id], 0, 2 * Math.PI);
-        ctx.fillStyle = '#9e9e9e';
+        ctx.fillStyle = d.id == hoverId ? hoverBallColor : unhoverBallColor;
         ctx.globalAlpha = opacityChanged ? opacities[d.id] || .1 : 1
         ctx.fill();
         // Node outline
