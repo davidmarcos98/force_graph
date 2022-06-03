@@ -14,16 +14,18 @@
        overflow: hidden;
    }
    body {
-       overflow: hidden;
+       /* overflow: hidden; */
    }
 </style>
 <body>
 <div id="container"></div>
 <div id="legend"></div>
+<ol id="list"></ol>
 
 <script src="https://d3js.org/d3.v5.min.js"></script>
 <script>
-var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight;
+var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight - 300;
+// var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight;
 var canvas = d3.select('#container')
     .append('canvas')
     .attr("id", "canvas")
@@ -43,6 +45,26 @@ let opacityChanged = false
 d3.json("data.json")
     .then(function(data){
         nodes = data.nodes.map(d => Object.assign({}, d));
+        let ol = document.getElementById("list");
+        for (let i of nodes) {
+            let li = document.createElement("li");
+            li.id = i.id;
+            li.innerHTML = i.author_handler;
+            li.addEventListener("click", function (event) {
+                transform.k = 1
+                rect = (container.getBoundingClientRect())
+                newnodes = simulation.nodes()
+                for (j = newnodes.length - 1; j >= 0; --j) {
+                    const node = newnodes[j]
+                    if (node.id == event.srcElement.id) {
+                        transform.x = -(node.x - width/2 - rect.left);
+                        transform.y = -(node.y - height/2 - rect.top);
+                    }
+                }
+            })
+            ol.appendChild(li);
+        }
+
         let degreeSize = d3.scaleLinear()
             .domain([d3.min(nodes, d => d.degree),d3.max(nodes, d => d.degree)])
             .range([10,75]);
@@ -219,6 +241,7 @@ function canvas_arrow(context, fromx, fromy, tox, toy, offset) {
 function simulationUpdate() {
     ctx.save();
     ctx.clearRect(0, 0, width, height);
+    // console.log(transform)
     ctx.translate(transform.x, transform.y);
     ctx.scale(transform.k, transform.k);
     // Draw edges
@@ -262,7 +285,7 @@ function findNode(nodes, x, y) {
             distSq = (dx * dx) + (dy * dy);
         let rSq = nodesRadius[node.id] * nodesRadius[node.id] + 1;
         if (distSq < rSq) {
-        return node;
+            return node;
         }
     }
     // No node selected
