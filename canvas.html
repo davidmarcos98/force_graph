@@ -12,6 +12,7 @@
    }
    #container{
        overflow: hidden;
+       min-height: 500px;
    }
    body {
        /* overflow: hidden; */
@@ -24,11 +25,13 @@
 
 <script src="https://d3js.org/d3.v5.min.js"></script>
 <script>
-var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight - 300;
-// var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight;
+    // var width = document.documentElement.clientWidth, height = document.documentElement.clientHeight;
 var canvas = d3.select('#container')
-    .append('canvas')
-    .attr("id", "canvas")
+.append('canvas')
+.attr("id", "canvas");
+let width = document.getElementById('canvas').parentElement.offsetWidth
+let height = document.getElementById('canvas').parentElement.offsetHeight
+canvas
     .attr('width', width)
     .attr('height', height);
 var ctx = canvas.node().getContext('2d');
@@ -280,10 +283,10 @@ function findNode(nodes, x, y) {
     let i;
     for (i = nodes.length - 1; i >= 0; --i) {
         const node = nodes[i],
-            dx = x - node.x,
-            dy = y - node.y,
-            distSq = (dx * dx) + (dy * dy);
-        let rSq = nodesRadius[node.id] * nodesRadius[node.id] + 1;
+                dx = x - node.x,
+                dy = y - node.y,
+                distSq = (dx * dx) + (dy * dy);
+            let rSq = nodesRadius[node.id] * nodesRadius[node.id] + 1;
         if (distSq < rSq) {
             return node;
         }
